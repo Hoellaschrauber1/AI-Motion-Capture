@@ -46,6 +46,8 @@
             width: 100%;
             height: 100%;
             object-fit: contain; /* Stellt sicher, dass das gesamte Video sichtbar ist */
+            /* GEÄNDERT: Sorgt dafür, dass die Kamera nicht spiegelverkehrt ist */
+            transform: scaleX(-1);
         }
 
         /* Passt die Größe der Steuerelemente auf kleinen Bildschirmen an */
@@ -167,7 +169,7 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
             if (results.poseLandmarks) {
-                // GEÄNDERT: Farbe auf Grün gesetzt
+                // Farbe auf Grün gesetzt
                 drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#10B981', lineWidth: 4 });
                 drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#6EE7B7', lineWidth: 2 });
 
