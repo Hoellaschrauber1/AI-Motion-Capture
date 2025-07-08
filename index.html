@@ -34,6 +34,31 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
+
+        /* NEU: Responsive Stile für mobile Geräte */
+        #video-container {
+            width: 100%;
+            max-height: 75vh; /* Verhindert, dass das Video auf hohen Bildschirmen zu groß wird */
+            background-color: #000;
+        }
+
+        #webcam, #output-canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Stellt sicher, dass das gesamte Video sichtbar ist */
+        }
+
+        /* Passt die Größe der Steuerelemente auf kleinen Bildschirmen an */
+        @media (max-width: 640px) {
+            #controls-container button {
+                padding: 0.75rem 1rem;
+                font-size: 0.875rem;
+            }
+            #exit-fullscreen-btn {
+                font-size: 0.875rem;
+                padding: 0.5rem 0.75rem;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
@@ -43,7 +68,7 @@
         <p id="status" class="text-blue-300 mb-4 h-6 text-center">Initialisiere Kamera...</p>
 
         <!-- Ladeanzeige -->
-        <div id="loader-container" class="w-full bg-gray-800 rounded-lg flex items-center justify-center" style="aspect-ratio: 16/9;">
+        <div id="loader-container" class="w-full bg-gray-800 rounded-lg flex items-center justify-center" style="aspect-ratio: 16/9; max-height: 75vh;">
             <div class="text-center">
                 <div class="loader mx-auto"></div>
                 <p class="mt-4 text-lg">KI-Modell wird geladen...</p>
@@ -51,10 +76,9 @@
         </div>
         
         <!-- Video und Canvas Container -->
-        <div id="video-container" class="relative w-full max-w-4xl rounded-lg overflow-hidden shadow-2xl hidden" style="aspect-ratio: 16/9;">
-            <video id="webcam" class="w-full h-full" playsinline style="display: none;"></video>
-            <canvas id="output-canvas" class="absolute top-0 left-0 w-full h-full"></canvas>
-            <!-- NEU: Button zum Beenden des Vollbildmodus -->
+        <div id="video-container" class="relative w-full rounded-lg overflow-hidden shadow-2xl hidden">
+            <video id="webcam" class="absolute top-0 left-0" playsinline></video>
+            <canvas id="output-canvas" class="absolute top-0 left-0"></canvas>
             <button id="exit-fullscreen-btn" class="absolute top-4 right-4 bg-black/50 hover:bg-black/75 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 hidden z-50">
                 Vollbild Beenden
             </button>
@@ -90,8 +114,8 @@
         const recordBtn = document.getElementById('record-btn');
         const stopBtn = document.getElementById('stop-btn');
         const fullscreenBtn = document.getElementById('fullscreen-btn');
-        const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn'); // NEU
-        const controlsContainer = document.getElementById('controls-container'); // NEU
+        const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
+        const controlsContainer = document.getElementById('controls-container');
         const appContainer = document.getElementById('app-container');
         const statusEl = document.getElementById('status');
         const loaderContainer = document.getElementById('loader-container');
@@ -108,11 +132,37 @@
                 ? `<span class="dot mr-2"></span> ${message}`
                 : message;
         }
+        
+        // NEU: Funktion zum Anpassen der Canvas-Größe
+        function resizeCanvas() {
+            const videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight;
+            const containerWidth = videoContainer.clientWidth;
+            const containerHeight = videoContainer.clientHeight;
+            const containerAspectRatio = containerWidth / containerHeight;
+
+            let canvasWidth, canvasHeight;
+
+            if (videoAspectRatio > containerAspectRatio) {
+                canvasWidth = containerWidth;
+                canvasHeight = containerWidth / videoAspectRatio;
+            } else {
+                canvasHeight = containerHeight;
+                canvasWidth = containerHeight * videoAspectRatio;
+            }
+
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+
+            const canvasStyle = canvasElement.style;
+            canvasStyle.width = `${canvasWidth}px`;
+            canvasStyle.height = `${canvasHeight}px`;
+            canvasStyle.top = `${(containerHeight - canvasHeight) / 2}px`;
+            canvasStyle.left = `${(containerWidth - canvasWidth) / 2}px`;
+        }
+
 
         // Funktion wird aufgerufen, wenn das Pose-Modell Ergebnisse liefert
         function onResults(results) {
-            canvasElement.width = videoElement.videoWidth;
-            canvasElement.height = videoElement.videoHeight;
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
@@ -198,7 +248,6 @@
             createAndDownloadZip();
         });
 
-        // Vollbild-Button zum Starten
         fullscreenBtn.addEventListener('click', () => {
             if (!document.fullscreenElement) {
                 appContainer.requestFullscreen().catch(err => {
@@ -207,25 +256,26 @@
             }
         });
 
-        // NEU: Button zum Beenden des Vollbilds
         exitFullscreenBtn.addEventListener('click', () => {
             if (document.fullscreenElement) {
                 document.exitFullscreen();
             }
         });
 
-        // NEU: Auf Änderungen des Vollbildstatus reagieren (wichtig für ESC-Taste)
         document.addEventListener('fullscreenchange', () => {
             if (document.fullscreenElement) {
-                // Im Vollbildmodus: Zeige den kleinen "Beenden"-Button und verstecke die Hauptsteuerung
                 exitFullscreenBtn.classList.remove('hidden');
                 controlsContainer.classList.add('hidden');
             } else {
-                // Nicht im Vollbildmodus: Verstecke den "Beenden"-Button und zeige die Hauptsteuerung
                 exitFullscreenBtn.classList.add('hidden');
                 controlsContainer.classList.remove('hidden');
             }
+            // Größe nach Änderung des Vollbildstatus neu berechnen
+            setTimeout(resizeCanvas, 100);
         });
+        
+        // NEU: Event-Listener für die Größenänderung des Fensters
+        window.addEventListener('resize', resizeCanvas);
 
         // App starten
         async function main() {
@@ -238,7 +288,12 @@
                 videoElement.addEventListener('loadeddata', () => {
                     loaderContainer.classList.add('hidden');
                     videoContainer.classList.remove('hidden');
-                    videoElement.style.display = 'block';
+                    
+                    // NEU: Initiales Anpassen der Canvas-Größe
+                    const videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight;
+                    videoContainer.style.aspectRatio = videoAspectRatio;
+                    resizeCanvas();
+
                     updateStatus("Bereit! Drücke 'Aufnehmen', um zu starten.");
                 });
             }, 1000);
