@@ -54,10 +54,14 @@
         <div id="video-container" class="relative w-full max-w-4xl rounded-lg overflow-hidden shadow-2xl hidden" style="aspect-ratio: 16/9;">
             <video id="webcam" class="w-full h-full" playsinline style="display: none;"></video>
             <canvas id="output-canvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+            <!-- NEU: Button zum Beenden des Vollbildmodus -->
+            <button id="exit-fullscreen-btn" class="absolute top-4 right-4 bg-black/50 hover:bg-black/75 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 hidden z-50">
+                Vollbild Beenden
+            </button>
         </div>
 
         <!-- Steuerungselemente -->
-        <div class="flex flex-wrap items-center justify-center gap-4 mt-6">
+        <div id="controls-container" class="flex flex-wrap items-center justify-center gap-4 mt-6">
             <button id="record-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed">
                 <span id="record-icon" class="w-3 h-3 bg-white rounded-full"></span>
                 <span id="record-text">Aufnehmen</span>
@@ -86,6 +90,8 @@
         const recordBtn = document.getElementById('record-btn');
         const stopBtn = document.getElementById('stop-btn');
         const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn'); // NEU
+        const controlsContainer = document.getElementById('controls-container'); // NEU
         const appContainer = document.getElementById('app-container');
         const statusEl = document.getElementById('status');
         const loaderContainer = document.getElementById('loader-container');
@@ -105,22 +111,15 @@
 
         // Funktion wird aufgerufen, wenn das Pose-Modell Ergebnisse liefert
         function onResults(results) {
-            // Canvas an Video anpassen
             canvasElement.width = videoElement.videoWidth;
             canvasElement.height = videoElement.videoHeight;
-
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
-            // Zeichne das Video-Bild auf den Canvas (optional, aber gut für die Synchronisation)
-            // canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
-            // Zeichne die erkannten Pose-Landmarken
             if (results.poseLandmarks) {
                 drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#0ea5e9', lineWidth: 4 });
                 drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#67e8f9', lineWidth: 2 });
 
-                // Wenn die Aufnahme läuft, speichere die Daten
                 if (isRecording) {
                     const timestamp = performance.now();
                     recordedData.push({
@@ -138,12 +137,10 @@
                 updateStatus("Keine Daten zum Exportieren vorhanden.");
                 return;
             }
-
             updateStatus("ZIP-Datei wird erstellt...");
             const zip = new JSZip();
             const jsonData = JSON.stringify(recordedData, null, 2);
             zip.file("motion_capture_data.json", jsonData);
-
             zip.generateAsync({ type: "blob" })
                 .then(function(content) {
                     const link = document.createElement('a');
@@ -160,11 +157,8 @@
         // Initialisierung des Pose-Modells
         function initializePose() {
              pose = new Pose({
-                locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-                }
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
             });
-
             pose.setOptions({
                 modelComplexity: 1,
                 smoothLandmarks: true,
@@ -173,7 +167,6 @@
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5
             });
-
             pose.onResults(onResults);
         }
 
@@ -189,7 +182,7 @@
             camera.start();
         }
 
-        // Event-Listener für die Buttons
+        // --- Event-Listener ---
         recordBtn.addEventListener('click', () => {
             isRecording = true;
             recordedData = [];
@@ -205,13 +198,32 @@
             createAndDownloadZip();
         });
 
+        // Vollbild-Button zum Starten
         fullscreenBtn.addEventListener('click', () => {
             if (!document.fullscreenElement) {
                 appContainer.requestFullscreen().catch(err => {
-                    alert(`Fehler beim Umschalten in den Vollbildmodus: ${err.message} (${err.name})`);
+                    console.error(`Fehler beim Umschalten in den Vollbildmodus: ${err.message} (${err.name})`);
                 });
-            } else {
+            }
+        });
+
+        // NEU: Button zum Beenden des Vollbilds
+        exitFullscreenBtn.addEventListener('click', () => {
+            if (document.fullscreenElement) {
                 document.exitFullscreen();
+            }
+        });
+
+        // NEU: Auf Änderungen des Vollbildstatus reagieren (wichtig für ESC-Taste)
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+                // Im Vollbildmodus: Zeige den kleinen "Beenden"-Button und verstecke die Hauptsteuerung
+                exitFullscreenBtn.classList.remove('hidden');
+                controlsContainer.classList.add('hidden');
+            } else {
+                // Nicht im Vollbildmodus: Verstecke den "Beenden"-Button und zeige die Hauptsteuerung
+                exitFullscreenBtn.classList.add('hidden');
+                controlsContainer.classList.remove('hidden');
             }
         });
 
@@ -220,20 +232,16 @@
             updateStatus("KI-Modell wird initialisiert...");
             initializePose();
             
-            // Warte, bis das Modell bereit ist (simuliert durch Timeout, da es keine direkte 'ready'-Event gibt)
-            // In der Praxis lädt `initializeCamera` und `pose.send` das Modell bei der ersten Verwendung.
             setTimeout(() => {
                 updateStatus("Kamera wird gestartet...");
                 initializeCamera();
-
                 videoElement.addEventListener('loadeddata', () => {
-                    // Verstecke den Lade-Spinner und zeige das Video
                     loaderContainer.classList.add('hidden');
                     videoContainer.classList.remove('hidden');
                     videoElement.style.display = 'block';
                     updateStatus("Bereit! Drücke 'Aufnehmen', um zu starten.");
                 });
-            }, 1000); // Eine kleine Verzögerung, um dem Benutzer Feedback zu geben
+            }, 1000);
         }
 
         main();
