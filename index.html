@@ -3,40 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Motion Capture</title>
-    
-    <!-- Tailwind CSS für das Styling -->
+    <title>KI Motion Capture App</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google Fonts für eine saubere Schriftart -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    
-    <!-- MediaPipe-Bibliotheken für die Pose-Erkennung -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
         }
-        /* Versteckt die Steuerelemente des Video-Elements */
-        .input_video {
-            display: none;
-        }
-        /* Stellt sicher, dass der Canvas responsiv ist */
-        .output_canvas {
-            width: 100%;
-            height: auto;
-            max-width: 1280px;
-            max-height: 720px;
-            border-radius: 0.75rem;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-        /* Styling für den Lade-Spinner */
         .loader {
             border: 8px solid #f3f3f3;
             border-radius: 50%;
@@ -49,100 +22,222 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .dot {
+            height: 12px;
+            width: 12px;
+            background-color: #f87171;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
 
-    <div class="w-full max-w-4xl mx-auto text-center">
-        <h1 class="text-4xl md:text-5xl font-bold mb-2">AI Motion Capture</h1>
-        <p class="text-gray-400 mb-6">Bitte erlauben Sie den Zugriff auf die Webcam, um die Pose-Erkennung zu starten.</p>
+    <div id="app-container" class="w-full max-w-4xl mx-auto flex flex-col items-center">
+        <h1 class="text-3xl md:text-4xl font-bold mb-2 text-center">KI Motion Capture</h1>
+        <p id="status" class="text-blue-300 mb-4 h-6 text-center">Initialisiere Kamera...</p>
 
-        <!-- Container für Video und Canvas -->
-        <div class="relative w-full aspect-video bg-gray-800 rounded-xl flex items-center justify-center">
-            <!-- Ladeanzeige -->
-            <div id="loading-spinner" class="loader"></div>
-            
-            <!-- Video-Element (unsichtbar), das den Webcam-Stream empfängt -->
-            <video class="input_video"></video>
-            
-            <!-- Canvas-Element, auf dem das Video und das Skelett gezeichnet werden -->
-            <canvas class="output_canvas absolute top-0 left-0"></canvas>
+        <!-- Ladeanzeige -->
+        <div id="loader-container" class="w-full bg-gray-800 rounded-lg flex items-center justify-center" style="aspect-ratio: 16/9;">
+            <div class="text-center">
+                <div class="loader mx-auto"></div>
+                <p class="mt-4 text-lg">KI-Modell wird geladen...</p>
+            </div>
         </div>
         
-        <div class="mt-4 text-sm text-gray-500">
-            Powered by Google MediaPipe
+        <!-- Video und Canvas Container -->
+        <div id="video-container" class="relative w-full max-w-4xl rounded-lg overflow-hidden shadow-2xl hidden" style="aspect-ratio: 16/9;">
+            <video id="webcam" class="w-full h-full" playsinline style="display: none;"></video>
+            <canvas id="output-canvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+        </div>
+
+        <!-- Steuerungselemente -->
+        <div class="flex flex-wrap items-center justify-center gap-4 mt-6">
+            <button id="record-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed">
+                <span id="record-icon" class="w-3 h-3 bg-white rounded-full"></span>
+                <span id="record-text">Aufnehmen</span>
+            </button>
+            <button id="stop-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed" disabled>
+                Beenden & Exportieren
+            </button>
+            <button id="fullscreen-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300">
+                Vollbild
+            </button>
         </div>
     </div>
 
+    <!-- Einbinden der Bibliotheken -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
     <script type="module">
-        // === GRUNDEINSTELLUNGEN ===
-        const videoElement = document.getElementsByClassName('input_video')[0];
-        const canvasElement = document.getElementsByClassName('output_canvas')[0];
+        // DOM-Elemente abrufen
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output-canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        const loadingSpinner = document.getElementById('loading-spinner');
+        const recordBtn = document.getElementById('record-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const appContainer = document.getElementById('app-container');
+        const statusEl = document.getElementById('status');
+        const loaderContainer = document.getElementById('loader-container');
+        const videoContainer = document.getElementById('video-container');
 
-        // Funktion, die aufgerufen wird, wenn die Pose-Erkennung Ergebnisse liefert
+        // Zustand der App
+        let isRecording = false;
+        let recordedData = [];
+        let pose;
+
+        // Funktion zum Aktualisieren des Status
+        function updateStatus(message, isRecordingStatus = false) {
+            statusEl.innerHTML = isRecordingStatus 
+                ? `<span class="dot mr-2"></span> ${message}`
+                : message;
+        }
+
+        // Funktion wird aufgerufen, wenn das Pose-Modell Ergebnisse liefert
         function onResults(results) {
-            // Verstecke den Lade-Spinner, sobald die ersten Ergebnisse da sind
-            if (loadingSpinner.style.display !== 'none') {
-                loadingSpinner.style.display = 'none';
-            }
-
-            // Setze die Größe des Canvas auf die Größe des Videos
+            // Canvas an Video anpassen
             canvasElement.width = videoElement.videoWidth;
             canvasElement.height = videoElement.videoHeight;
 
-            // Zeichne das Videobild auf den Canvas
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            
+            // Zeichne das Video-Bild auf den Canvas (optional, aber gut für die Synchronisation)
+            // canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-            // Zeichne das erkannte Skelett über das Videobild
+            // Zeichne die erkannten Pose-Landmarken
             if (results.poseLandmarks) {
-                // Zeichne die Verbindungslinien (z.B. Arme, Beine)
-                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
-                               {color: '#00FF00', lineWidth: 4});
-                // Zeichne die Gelenkpunkte (z.B. Ellbogen, Knie)
-                drawLandmarks(canvasCtx, results.poseLandmarks,
-                              {color: '#FF0000', lineWidth: 2});
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#0ea5e9', lineWidth: 4 });
+                drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#67e8f9', lineWidth: 2 });
+
+                // Wenn die Aufnahme läuft, speichere die Daten
+                if (isRecording) {
+                    const timestamp = performance.now();
+                    recordedData.push({
+                        timestamp: timestamp,
+                        landmarks: results.poseLandmarks
+                    });
+                }
             }
             canvasCtx.restore();
         }
 
-        // === MEDIAPIPE POSE INITIALISIERUNG ===
-        const pose = new Pose({locateFile: (file) => {
-            // Gib den Pfad zu den benötigten Modelldateien an
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-        }});
+        // ZIP-Datei erstellen und herunterladen
+        function createAndDownloadZip() {
+            if (recordedData.length === 0) {
+                updateStatus("Keine Daten zum Exportieren vorhanden.");
+                return;
+            }
 
-        // Konfiguriere die Pose-Instanz
-        pose.setOptions({
-            modelComplexity: 1,       // 0=schnell, 1=ausgewogen, 2=genau
-            smoothLandmarks: true,    // Glättet die Bewegung der Punkte zwischen den Frames
-            enableSegmentation: true, // Ermöglicht die Personensegmentierung (Hintergrundtrennung)
-            smoothSegmentation: true, // Glättet die Segmentierungsmaske
-            minDetectionConfidence: 0.5, // Minimale Konfidenz für die Erkennung einer Person
-            minTrackingConfidence: 0.5   // Minimale Konfidenz für das Verfolgen der Person
+            updateStatus("ZIP-Datei wird erstellt...");
+            const zip = new JSZip();
+            const jsonData = JSON.stringify(recordedData, null, 2);
+            zip.file("motion_capture_data.json", jsonData);
+
+            zip.generateAsync({ type: "blob" })
+                .then(function(content) {
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(content);
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    link.download = `motion_capture_${timestamp}.zip`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    updateStatus("Export erfolgreich! Bereit für die nächste Aufnahme.");
+                });
+        }
+
+        // Initialisierung des Pose-Modells
+        function initializePose() {
+             pose = new Pose({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+                }
+            });
+
+            pose.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                enableSegmentation: false,
+                smoothSegmentation: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            pose.onResults(onResults);
+        }
+
+        // Initialisierung der Kamera
+        function initializeCamera() {
+            const camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    await pose.send({ image: videoElement });
+                },
+                width: 1280,
+                height: 720
+            });
+            camera.start();
+        }
+
+        // Event-Listener für die Buttons
+        recordBtn.addEventListener('click', () => {
+            isRecording = true;
+            recordedData = [];
+            recordBtn.disabled = true;
+            stopBtn.disabled = false;
+            updateStatus("Aufnahme läuft...", true);
         });
 
-        // Verknüpfe die `onResults`-Funktion mit dem Pose-Objekt
-        pose.onResults(onResults);
-
-
-        // === WEBCAM-ZUGRIFF ===
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                // Sende den aktuellen Frame des Videos an das Pose-Modell zur Verarbeitung
-                await pose.send({image: videoElement});
-            },
-            width: 1280,
-            height: 720
+        stopBtn.addEventListener('click', () => {
+            isRecording = false;
+            recordBtn.disabled = false;
+            stopBtn.disabled = true;
+            createAndDownloadZip();
         });
-        
-        // Starte die Kamera
-        camera.start();
+
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                appContainer.requestFullscreen().catch(err => {
+                    alert(`Fehler beim Umschalten in den Vollbildmodus: ${err.message} (${err.name})`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        // App starten
+        async function main() {
+            updateStatus("KI-Modell wird initialisiert...");
+            initializePose();
+            
+            // Warte, bis das Modell bereit ist (simuliert durch Timeout, da es keine direkte 'ready'-Event gibt)
+            // In der Praxis lädt `initializeCamera` und `pose.send` das Modell bei der ersten Verwendung.
+            setTimeout(() => {
+                updateStatus("Kamera wird gestartet...");
+                initializeCamera();
+
+                videoElement.addEventListener('loadeddata', () => {
+                    // Verstecke den Lade-Spinner und zeige das Video
+                    loaderContainer.classList.add('hidden');
+                    videoContainer.classList.remove('hidden');
+                    videoElement.style.display = 'block';
+                    updateStatus("Bereit! Drücke 'Aufnehmen', um zu starten.");
+                });
+            }, 1000); // Eine kleine Verzögerung, um dem Benutzer Feedback zu geben
+        }
+
+        main();
 
     </script>
 </body>
 </html>
-c
