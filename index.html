@@ -3,31 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Motion Capture</title>
+    <title>AI Motion Capture mit 3D-Export</title>
     
-    <!-- Tailwind CSS für das Styling -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Google Fonts für eine saubere Schriftart -->
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <!-- MediaPipe-Bibliotheken für die Pose-Erkennung -->
+    <!-- MediaPipe Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 
+    <!-- Libraries for 3D Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        /* Versteckt die Steuerelemente des Video-Elements */
-        .input_video {
-            display: none;
-        }
-        /* Stellt sicher, dass der Canvas responsiv ist */
+        body { font-family: 'Inter', sans-serif; }
+        .input_video { display: none; }
         .output_canvas {
             width: 100%;
             height: auto;
@@ -36,7 +35,6 @@
             border-radius: 0.75rem;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
-        /* Styling für den Lade-Spinner */
         .loader {
             border: 8px solid #f3f3f3;
             border-radius: 50%;
@@ -49,99 +47,265 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Button Styling */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            color: white;
+            transition: background-color 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-green { background-color: #10B981; }
+        .btn-green:hover { background-color: #059669; }
+        .btn-red { background-color: #EF4444; }
+        .btn-red:hover { background-color: #DC2626; }
+        .btn-blue { background-color: #3B82F6; }
+        .btn-blue:hover { background-color: #2563EB; }
+        .btn:disabled { background-color: #6B7280; cursor: not-allowed; }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
 
     <div class="w-full max-w-4xl mx-auto text-center">
         <h1 class="text-4xl md:text-5xl font-bold mb-2">AI Motion Capture</h1>
-        <p class="text-gray-400 mb-6">Bitte erlauben Sie den Zugriff auf die Webcam, um die Pose-Erkennung zu starten.</p>
+        <p id="status-text" class="text-gray-400 mb-6">Bitte erlauben Sie den Zugriff auf die Webcam.</p>
 
-        <!-- Container für Video und Canvas -->
-        <div class="relative w-full aspect-video bg-gray-800 rounded-xl flex items-center justify-center">
-            <!-- Ladeanzeige -->
+        <div class="relative w-full aspect-video bg-gray-800 rounded-xl flex items-center justify-center mb-4">
             <div id="loading-spinner" class="loader"></div>
-            
-            <!-- Video-Element (unsichtbar), das den Webcam-Stream empfängt -->
             <video class="input_video"></video>
-            
-            <!-- Canvas-Element, auf dem das Video und das Skelett gezeichnet werden -->
             <canvas class="output_canvas absolute top-0 left-0"></canvas>
         </div>
         
+        <!-- Control Buttons -->
+        <div class="flex justify-center items-center space-x-4">
+            <button id="startButton" class="btn btn-green">Aufnahme starten</button>
+            <button id="stopButton" class="btn btn-red" style="display: none;">Aufnahme beenden</button>
+            <button id="downloadButton" class="btn btn-blue" style="display: none;">ZIP herunterladen</button>
+        </div>
+        
         <div class="mt-4 text-sm text-gray-500">
-            Powered by Google MediaPipe
+            Powered by Google MediaPipe, three.js & JSZip
         </div>
     </div>
 
     <script type="module">
-        // === GRUNDEINSTELLUNGEN ===
+        // === UI & STATE MANAGEMENT ===
         const videoElement = document.getElementsByClassName('input_video')[0];
         const canvasElement = document.getElementsByClassName('output_canvas')[0];
         const canvasCtx = canvasElement.getContext('2d');
         const loadingSpinner = document.getElementById('loading-spinner');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const statusText = document.getElementById('status-text');
 
-        // Funktion, die aufgerufen wird, wenn die Pose-Erkennung Ergebnisse liefert
+        let isRecording = false;
+        let recordedFrames = [];
+        let lastFrameTime = 0;
+        let zipBlob = null;
+
+        // === EVENT LISTENERS ===
+        startButton.onclick = () => {
+            isRecording = true;
+            recordedFrames = [];
+            zipBlob = null;
+            lastFrameTime = performance.now();
+            
+            startButton.style.display = 'none';
+            stopButton.style.display = 'inline-block';
+            downloadButton.style.display = 'none';
+            statusText.textContent = '🔴 Aufnahme läuft...';
+        };
+
+        stopButton.onclick = () => {
+            isRecording = false;
+            stopButton.style.display = 'none';
+            statusText.textContent = '🔄 Verarbeitung der Animation... Bitte warten.';
+            
+            // Disable button to prevent multiple clicks
+            stopButton.disabled = true;
+
+            // Process the recorded frames in the background
+            setTimeout(() => {
+                processAndCreateZip(recordedFrames);
+                startButton.style.display = 'inline-block';
+                startButton.disabled = false;
+                stopButton.disabled = false;
+            }, 100); // Small delay to allow UI update
+        };
+
+        downloadButton.onclick = () => {
+            if (zipBlob) {
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'motion-capture.zip';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            }
+        };
+
+        // === MEDIAPIPE & CAMERA SETUP ===
         function onResults(results) {
-            // Verstecke den Lade-Spinner, sobald die ersten Ergebnisse da sind
             if (loadingSpinner.style.display !== 'none') {
                 loadingSpinner.style.display = 'none';
+                statusText.textContent = 'Kamera bereit. Starten Sie die Aufnahme.';
             }
 
-            // Setze die Größe des Canvas auf die Größe des Videos
             canvasElement.width = videoElement.videoWidth;
             canvasElement.height = videoElement.videoHeight;
 
-            // Zeichne das Videobild auf den Canvas
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-            // Zeichne das erkannte Skelett über das Videobild
             if (results.poseLandmarks) {
-                // Zeichne die Verbindungslinien (z.B. Arme, Beine)
-                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
-                               {color: '#00FF00', lineWidth: 4});
-                // Zeichne die Gelenkpunkte (z.B. Ellbogen, Knie)
-                drawLandmarks(canvasCtx, results.poseLandmarks,
-                              {color: '#FF0000', lineWidth: 2});
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+                drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 2});
             }
             canvasCtx.restore();
+
+            if (isRecording && results.poseWorldLandmarks) {
+                 const now = performance.now();
+                 const timeDelta = (now - lastFrameTime) / 1000.0; // time in seconds
+                 lastFrameTime = now;
+
+                // We need to clone the landmarks object
+                const landmarksCopy = JSON.parse(JSON.stringify(results.poseWorldLandmarks));
+                recordedFrames.push({ landmarks: landmarksCopy, time: timeDelta });
+            }
         }
 
-        // === MEDIAPIPE POSE INITIALISIERUNG ===
-        const pose = new Pose({locateFile: (file) => {
-            // Gib den Pfad zu den benötigten Modelldateien an
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-        }});
-
-        // Konfiguriere die Pose-Instanz
+        const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
         pose.setOptions({
-            modelComplexity: 1,       // 0=schnell, 1=ausgewogen, 2=genau
-            smoothLandmarks: true,    // Glättet die Bewegung der Punkte zwischen den Frames
-            enableSegmentation: true, // Ermöglicht die Personensegmentierung (Hintergrundtrennung)
-            smoothSegmentation: true, // Glättet die Segmentierungsmaske
-            minDetectionConfidence: 0.5, // Minimale Konfidenz für die Erkennung einer Person
-            minTrackingConfidence: 0.5   // Minimale Konfidenz für das Verfolgen der Person
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false, // Segmentation not needed for this
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
         });
-
-        // Verknüpfe die `onResults`-Funktion mit dem Pose-Objekt
         pose.onResults(onResults);
 
-
-        // === WEBCAM-ZUGRIFF ===
         const camera = new Camera(videoElement, {
             onFrame: async () => {
-                // Sende den aktuellen Frame des Videos an das Pose-Modell zur Verarbeitung
                 await pose.send({image: videoElement});
             },
             width: 1280,
             height: 720
         });
-        
-        // Starte die Kamera
         camera.start();
 
+        // === 3D PROCESSING & EXPORT LOGIC ===
+        async function processAndCreateZip(frames) {
+            if (frames.length === 0) {
+                statusText.textContent = 'Keine Daten aufgenommen. Bitte versuchen Sie es erneut.';
+                return;
+            }
+
+            // 1. Create Skeleton and Bones based on MediaPipe Pose Connections
+            const boneMap = {};
+            const bones = [];
+            const boneIndices = {};
+
+            POSE_CONNECTIONS.forEach(conn => {
+                const start = conn[0];
+                const end = conn[1];
+                
+                // Create parent bones first
+                if (!boneMap[start]) {
+                    const bone = new THREE.Bone();
+                    bone.name = `bone_${start}`;
+                    bones.push(bone);
+                    boneMap[start] = bone;
+                    boneIndices[start] = bones.length - 1;
+                }
+                if (!boneMap[end]) {
+                    const bone = new THREE.Bone();
+                    bone.name = `bone_${end}`;
+                    bones.push(bone);
+                    boneMap[end] = bone;
+                    boneIndices[end] = bones.length - 1;
+                }
+            });
+            
+            // Simple hierarchy (can be improved)
+            // This part is complex, for a simple export we can parent most to a central hip bone
+            const hipIndex = 24; // Right hip
+            if(boneMap[hipIndex]){
+                 bones.forEach((bone, index) => {
+                    if(index !== boneIndices[hipIndex]) {
+                        boneMap[hipIndex].add(bone);
+                    }
+                 });
+            }
+
+            const skeleton = new THREE.Skeleton(bones);
+
+            // 2. Create Animation Clip
+            const tracks = [];
+            skeleton.bones.forEach((bone, index) => {
+                const landmarkIndex = parseInt(bone.name.replace('bone_', ''));
+                const positionKF = new THREE.VectorKeyframeTrack(
+                    `.bones[${index}].position`,
+                    [], // times
+                    []  // values
+                );
+                tracks.push(positionKF);
+            });
+
+            let currentTime = 0;
+            frames.forEach((frame, frameIndex) => {
+                currentTime += frame.time;
+                tracks.forEach((track, trackIndex) => {
+                    const bone = skeleton.bones[trackIndex];
+                    const landmarkIndex = parseInt(bone.name.replace('bone_', ''));
+                    const landmark = frame.landmarks[landmarkIndex];
+
+                    if (landmark) {
+                        // MediaPipe's Z is inverted for standard GLB
+                        track.times.push(currentTime);
+                        track.values.push(landmark.x, landmark.y, -landmark.z);
+                    }
+                });
+            });
+
+            const clip = new THREE.AnimationClip('PoseAnimation', -1, tracks);
+
+            // 3. Create a Skinned Mesh to host the animation
+            const scene = new THREE.Scene();
+            const geometry = new THREE.BoxGeometry(1, 1, 1); // Placeholder geometry
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+            const mesh = new THREE.SkinnedMesh(geometry, material);
+            
+            mesh.add(skeleton.bones[0]); // Add the root bone
+            mesh.bind(skeleton);
+            scene.add(mesh);
+            
+            // 4. Export to GLB
+            const exporter = new THREE.GLTFExporter();
+            exporter.parse(
+                scene,
+                (gltf) => {
+                    const glb = new Blob([gltf], { type: 'application/octet-stream' });
+                    
+                    // 5. Create ZIP file
+                    const zip = new JSZip();
+                    zip.file("animation.glb", glb);
+                    zip.file("readme.txt", "Import animation.glb into Blender or another 3D viewer.\n\nCreated with AI Motion Capture App.");
+
+                    zip.generateAsync({ type: "blob" }).then(content => {
+                        zipBlob = content;
+                        statusText.textContent = '✅ Verarbeitung abgeschlossen! Bereit zum Herunterladen.';
+                        downloadButton.style.display = 'inline-block';
+                    });
+                },
+                { binary: true, animations: [clip] }
+            );
+        }
     </script>
 </body>
 </html>
