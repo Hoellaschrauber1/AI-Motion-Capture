@@ -38,15 +38,14 @@
         /* Responsive Stile für mobile Geräte */
         #video-container {
             width: 100%;
-            max-height: 75vh; /* Verhindert, dass das Video auf hohen Bildschirmen zu groß wird */
+            max-height: 75vh;
             background-color: #000;
         }
 
         #webcam, #output-canvas {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Stellt sicher, dass das gesamte Video sichtbar ist */
-            /* GEÄNDERT: Sorgt dafür, dass die Kamera nicht spiegelverkehrt ist */
+            object-fit: contain;
             transform: scaleX(-1);
         }
 
@@ -60,6 +59,25 @@
                 font-size: 0.875rem;
                 padding: 0.5rem 0.75rem;
             }
+        }
+
+        /* NEU: Klasse für den simulierten Vollbildmodus */
+        .fake-fullscreen {
+            position: fixed !important;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #020617; /* Dunkler Hintergrund */
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            overflow: hidden;
         }
     </style>
 </head>
@@ -127,23 +145,24 @@
         let isRecording = false;
         let recordedData = [];
         let pose;
+        
+        const VISIBILITY_THRESHOLD = 0.65;
+        const VISIBLE_COLOR = '#6EE7B7';
+        const ESTIMATED_COLOR = '#047857';
+        const CONNECTION_COLOR = '#10B981';
 
-        // Funktion zum Aktualisieren des Status
         function updateStatus(message, isRecordingStatus = false) {
             statusEl.innerHTML = isRecordingStatus 
                 ? `<span class="dot mr-2"></span> ${message}`
                 : message;
         }
         
-        // Funktion zum Anpassen der Canvas-Größe
         function resizeCanvas() {
             const videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight;
             const containerWidth = videoContainer.clientWidth;
             const containerHeight = videoContainer.clientHeight;
             const containerAspectRatio = containerWidth / containerHeight;
-
             let canvasWidth, canvasHeight;
-
             if (videoAspectRatio > containerAspectRatio) {
                 canvasWidth = containerWidth;
                 canvasHeight = containerWidth / videoAspectRatio;
@@ -151,10 +170,8 @@
                 canvasHeight = containerHeight;
                 canvasWidth = containerHeight * videoAspectRatio;
             }
-
             canvasElement.width = videoElement.videoWidth;
             canvasElement.height = videoElement.videoHeight;
-
             const canvasStyle = canvasElement.style;
             canvasStyle.width = `${canvasWidth}px`;
             canvasStyle.height = `${canvasHeight}px`;
@@ -162,16 +179,19 @@
             canvasStyle.left = `${(containerWidth - canvasWidth) / 2}px`;
         }
 
-
-        // Funktion wird aufgerufen, wenn das Pose-Modell Ergebnisse liefert
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
             if (results.poseLandmarks) {
-                // Farbe auf Grün gesetzt
-                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#10B981', lineWidth: 4 });
-                drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#6EE7B7', lineWidth: 2 });
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: CONNECTION_COLOR, lineWidth: 4 });
+                results.poseLandmarks.forEach(landmark => {
+                    const isVisible = landmark.visibility > VISIBILITY_THRESHOLD;
+                    canvasCtx.fillStyle = isVisible ? VISIBLE_COLOR : ESTIMATED_COLOR;
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(landmark.x * canvasElement.width, landmark.y * canvasElement.height, isVisible ? 5 : 3, 0, 2 * Math.PI);
+                    canvasCtx.fill();
+                });
 
                 if (isRecording) {
                     const timestamp = performance.now();
@@ -184,7 +204,6 @@
             canvasCtx.restore();
         }
 
-        // ZIP-Datei erstellen und herunterladen
         function createAndDownloadZip() {
             if (recordedData.length === 0) {
                 updateStatus("Keine Daten zum Exportieren vorhanden.");
@@ -207,7 +226,6 @@
                 });
         }
 
-        // Initialisierung des Pose-Modells
         function initializePose() {
              pose = new Pose({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
@@ -223,7 +241,6 @@
             pose.onResults(onResults);
         }
 
-        // Initialisierung der Kamera
         function initializeCamera() {
             const camera = new Camera(videoElement, {
                 onFrame: async () => {
@@ -233,6 +250,21 @@
                 height: 720
             });
             camera.start();
+        }
+        
+        // GEÄNDERT: Funktion für den simulierten Vollbildmodus
+        function toggleFakeFullscreen() {
+            const isInFullscreen = appContainer.classList.contains('fake-fullscreen');
+            if (isInFullscreen) {
+                appContainer.classList.remove('fake-fullscreen');
+                exitFullscreenBtn.classList.add('hidden');
+                controlsContainer.classList.remove('hidden');
+            } else {
+                appContainer.classList.add('fake-fullscreen');
+                exitFullscreenBtn.classList.remove('hidden');
+                controlsContainer.classList.add('hidden');
+            }
+            setTimeout(resizeCanvas, 50);
         }
 
         // --- Event-Listener ---
@@ -250,34 +282,11 @@
             stopBtn.disabled = true;
             createAndDownloadZip();
         });
-
-        fullscreenBtn.addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                appContainer.requestFullscreen().catch(err => {
-                    console.error(`Fehler beim Umschalten in den Vollbildmodus: ${err.message} (${err.name})`);
-                });
-            }
-        });
-
-        exitFullscreenBtn.addEventListener('click', () => {
-            if (document.fullscreenElement) {
-                document.exitFullscreen();
-            }
-        });
-
-        document.addEventListener('fullscreenchange', () => {
-            if (document.fullscreenElement) {
-                exitFullscreenBtn.classList.remove('hidden');
-                controlsContainer.classList.add('hidden');
-            } else {
-                exitFullscreenBtn.classList.add('hidden');
-                controlsContainer.classList.remove('hidden');
-            }
-            // Größe nach Änderung des Vollbildstatus neu berechnen
-            setTimeout(resizeCanvas, 100);
-        });
         
-        // Event-Listener für die Größenänderung des Fensters
+        // GEÄNDERT: Event-Listener für den simulierten Vollbildmodus
+        fullscreenBtn.addEventListener('click', toggleFakeFullscreen);
+        exitFullscreenBtn.addEventListener('click', toggleFakeFullscreen);
+        
         window.addEventListener('resize', resizeCanvas);
 
         // App starten
@@ -291,12 +300,9 @@
                 videoElement.addEventListener('loadeddata', () => {
                     loaderContainer.classList.add('hidden');
                     videoContainer.classList.remove('hidden');
-                    
-                    // Initiales Anpassen der Canvas-Größe
                     const videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight;
                     videoContainer.style.aspectRatio = videoAspectRatio;
                     resizeCanvas();
-
                     updateStatus("Bereit! Drücke 'Aufnehmen', um zu starten.");
                 });
             }, 1000);
