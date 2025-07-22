@@ -3,313 +3,226 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KI Motion Capture App</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .loader {
-            border: 8px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 8px solid #3498db;
-            width: 60px;
-            height: 60px;
-            animation: spin 2s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .dot {
-            height: 12px;
-            width: 12px;
-            background-color: #f87171;
-            border-radius: 50%;
-            display: inline-block;
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-
-        /* Responsive Stile für mobile Geräte */
-        #video-container {
-            width: 100%;
-            max-height: 75vh;
-            background-color: #000;
-        }
-
-        #webcam, #output-canvas {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            transform: scaleX(-1);
-        }
-
-        /* Passt die Größe der Steuerelemente auf kleinen Bildschirmen an */
-        @media (max-width: 640px) {
-            #controls-container button {
-                padding: 0.75rem 1rem;
-                font-size: 0.875rem;
-            }
-            #exit-fullscreen-btn {
-                font-size: 0.875rem;
-                padding: 0.5rem 0.75rem;
-            }
-        }
-
-        /* NEU: Klasse für den simulierten Vollbildmodus */
-        .fake-fullscreen {
-            position: fixed !important;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #020617; /* Dunkler Hintergrund */
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-            overflow: hidden;
-        }
-    </style>
-</head>
-<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
-
-    <div id="app-container" class="w-full max-w-4xl mx-auto flex flex-col items-center">
-        <h1 class="text-3xl md:text-4xl font-bold mb-2 text-center">KI Motion Capture</h1>
-        <p id="status" class="text-blue-300 mb-4 h-6 text-center">Initialisiere Kamera...</p>
-
-        <!-- Ladeanzeige -->
-        <div id="loader-container" class="w-full bg-gray-800 rounded-lg flex items-center justify-center" style="aspect-ratio: 16/9; max-height: 75vh;">
-            <div class="text-center">
-                <div class="loader mx-auto"></div>
-                <p class="mt-4 text-lg">KI-Modell wird geladen...</p>
+    <title>Fortnite Status App</title>
+    <link rel="stylesheet" href="style.css">
+    </head>
+<body>
+    <header class="app-header">
+        <div class="app-name">Fortnite Status App</div>
+        <div class="user-controls">
+            <div class="profile-icon-container">
+                <img src="https://via.placeholder.com/40" alt="Profil-Icon" class="profile-icon">
+                </div>
             </div>
-        </div>
-        
-        <!-- Video und Canvas Container -->
-        <div id="video-container" class="relative w-full rounded-lg overflow-hidden shadow-2xl hidden">
-            <video id="webcam" class="absolute top-0 left-0" playsinline></video>
-            <canvas id="output-canvas" class="absolute top-0 left-0"></canvas>
-            <button id="exit-fullscreen-btn" class="absolute top-4 right-4 bg-black/50 hover:bg-black/75 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 hidden z-50">
-                Vollbild Beenden
-            </button>
-        </div>
+    </header>
 
-        <!-- Steuerungselemente -->
-        <div id="controls-container" class="flex flex-wrap items-center justify-center gap-4 mt-6">
-            <button id="record-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed">
-                <span id="record-icon" class="w-3 h-3 bg-white rounded-full"></span>
-                <span id="record-text">Aufnehmen</span>
-            </button>
-            <button id="stop-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 disabled:bg-gray-500 disabled:cursor-not-allowed" disabled>
-                Beenden & Exportieren
-            </button>
-            <button id="fullscreen-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300">
-                Vollbild
-            </button>
-        </div>
-    </div>
+    <main class="app-content">
+        <section id="auth-section" class="glass-effect">
+            <h2>Anmelden / Registrieren</h2>
+            <form id="login-form">
+                <input type="email" id="login-email" placeholder="E-Mail" required>
+                <input type="password" id="login-password" placeholder="Passwort" required>
+                <button type="submit" class="glass-button">Anmelden</button>
+            </form>
+            <p>Noch kein Konto? <a href="#" id="show-register">Registrieren</a></p>
+            <p><a href="#" id="forgot-password">Passwort vergessen?</a></p>
 
-    <!-- Einbinden der Bibliotheken -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+            <form id="register-form" style="display: none;">
+                <input type="email" id="register-email" placeholder="E-Mail" required>
+                <input type="password" id="register-password" placeholder="Passwort" required>
+                <input type="password" id="register-password-confirm" placeholder="Passwort bestätigen" required>
+                <button type="submit" class="glass-button">Registrieren</button>
+                <p><a href="#" id="show-login">Zurück zum Anmelden</a></p>
+            </form>
+        </section>
+    </main>
 
-    <script type="module">
-        // DOM-Elemente abrufen
-        const videoElement = document.getElementById('webcam');
-        const canvasElement = document.getElementById('output-canvas');
-        const canvasCtx = canvasElement.getContext('2d');
-        const recordBtn = document.getElementById('record-btn');
-        const stopBtn = document.getElementById('stop-btn');
-        const fullscreenBtn = document.getElementById('fullscreen-btn');
-        const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
-        const controlsContainer = document.getElementById('controls-container');
-        const appContainer = document.getElementById('app-container');
-        const statusEl = document.getElementById('status');
-        const loaderContainer = document.getElementById('loader-container');
-        const videoContainer = document.getElementById('video-container');
-
-        // Zustand der App
-        let isRecording = false;
-        let recordedData = [];
-        let pose;
-        
-        const VISIBILITY_THRESHOLD = 0.65;
-        const VISIBLE_COLOR = '#6EE7B7';
-        const ESTIMATED_COLOR = '#047857';
-        const CONNECTION_COLOR = '#10B981';
-
-        function updateStatus(message, isRecordingStatus = false) {
-            statusEl.innerHTML = isRecordingStatus 
-                ? `<span class="dot mr-2"></span> ${message}`
-                : message;
-        }
-        
-        function resizeCanvas() {
-            const videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight;
-            const containerWidth = videoContainer.clientWidth;
-            const containerHeight = videoContainer.clientHeight;
-            const containerAspectRatio = containerWidth / containerHeight;
-            let canvasWidth, canvasHeight;
-            if (videoAspectRatio > containerAspectRatio) {
-                canvasWidth = containerWidth;
-                canvasHeight = containerWidth / videoAspectRatio;
-            } else {
-                canvasHeight = containerHeight;
-                canvasWidth = containerHeight * videoAspectRatio;
-            }
-            canvasElement.width = videoElement.videoWidth;
-            canvasElement.height = videoElement.videoHeight;
-            const canvasStyle = canvasElement.style;
-            canvasStyle.width = `${canvasWidth}px`;
-            canvasStyle.height = `${canvasHeight}px`;
-            canvasStyle.top = `${(containerHeight - canvasHeight) / 2}px`;
-            canvasStyle.left = `${(containerWidth - canvasWidth) / 2}px`;
-        }
-
-        function onResults(results) {
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            
-            if (results.poseLandmarks) {
-                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: CONNECTION_COLOR, lineWidth: 4 });
-                results.poseLandmarks.forEach(landmark => {
-                    const isVisible = landmark.visibility > VISIBILITY_THRESHOLD;
-                    canvasCtx.fillStyle = isVisible ? VISIBLE_COLOR : ESTIMATED_COLOR;
-                    canvasCtx.beginPath();
-                    canvasCtx.arc(landmark.x * canvasElement.width, landmark.y * canvasElement.height, isVisible ? 5 : 3, 0, 2 * Math.PI);
-                    canvasCtx.fill();
-                });
-
-                if (isRecording) {
-                    const timestamp = performance.now();
-                    recordedData.push({
-                        timestamp: timestamp,
-                        landmarks: results.poseLandmarks
-                    });
-                }
-            }
-            canvasCtx.restore();
-        }
-
-        function createAndDownloadZip() {
-            if (recordedData.length === 0) {
-                updateStatus("Keine Daten zum Exportieren vorhanden.");
-                return;
-            }
-            updateStatus("ZIP-Datei wird erstellt...");
-            const zip = new JSZip();
-            const jsonData = JSON.stringify(recordedData, null, 2);
-            zip.file("motion_capture_data.json", jsonData);
-            zip.generateAsync({ type: "blob" })
-                .then(function(content) {
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(content);
-                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                    link.download = `motion_capture_${timestamp}.zip`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    updateStatus("Export erfolgreich! Bereit für die nächste Aufnahme.");
-                });
-        }
-
-        function initializePose() {
-             pose = new Pose({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-            });
-            pose.setOptions({
-                modelComplexity: 1,
-                smoothLandmarks: true,
-                enableSegmentation: false,
-                smoothSegmentation: true,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
-            pose.onResults(onResults);
-        }
-
-        function initializeCamera() {
-            const camera = new Camera(videoElement, {
-                onFrame: async () => {
-                    await pose.send({ image: videoElement });
-                },
-                width: 1280,
-                height: 720
-            });
-            camera.start();
-        }
-        
-        // GEÄNDERT: Funktion für den simulierten Vollbildmodus
-        function toggleFakeFullscreen() {
-            const isInFullscreen = appContainer.classList.contains('fake-fullscreen');
-            if (isInFullscreen) {
-                appContainer.classList.remove('fake-fullscreen');
-                exitFullscreenBtn.classList.add('hidden');
-                controlsContainer.classList.remove('hidden');
-            } else {
-                appContainer.classList.add('fake-fullscreen');
-                exitFullscreenBtn.classList.remove('hidden');
-                controlsContainer.classList.add('hidden');
-            }
-            setTimeout(resizeCanvas, 50);
-        }
-
-        // --- Event-Listener ---
-        recordBtn.addEventListener('click', () => {
-            isRecording = true;
-            recordedData = [];
-            recordBtn.disabled = true;
-            stopBtn.disabled = false;
-            updateStatus("Aufnahme läuft...", true);
-        });
-
-        stopBtn.addEventListener('click', () => {
-            isRecording = false;
-            recordBtn.disabled = false;
-            stopBtn.disabled = true;
-            createAndDownloadZip();
-        });
-        
-        // GEÄNDERT: Event-Listener für den simulierten Vollbildmodus
-        fullscreenBtn.addEventListener('click', toggleFakeFullscreen);
-        exitFullscreenBtn.addEventListener('click', toggleFakeFullscreen);
-        
-        window.addEventListener('resize', resizeCanvas);
-
-        // App starten
-        async function main() {
-            updateStatus("KI-Modell wird initialisiert...");
-            initializePose();
-            
-            setTimeout(() => {
-                updateStatus("Kamera wird gestartet...");
-                initializeCamera();
-                videoElement.addEventListener('loadeddata', () => {
-                    loaderContainer.classList.add('hidden');
-                    videoContainer.classList.remove('hidden');
-                    const videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight;
-                    videoContainer.style.aspectRatio = videoAspectRatio;
-                    resizeCanvas();
-                    updateStatus("Bereit! Drücke 'Aufnehmen', um zu starten.");
-                });
-            }, 1000);
-        }
-
-        main();
-
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
+/* Grundlegende Stile */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Fortnite-ähnliche Schriftart */
+    background: linear-gradient(135deg, #1a1a2e, #16213e); /* Verlaufshintergrund */
+    color: #e0e0e0; /* Helle Textfarbe */
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; /* Mindesthöhe des Viewports */
+    align-items: center; /* Zentriert Inhalte horizontal */
+    justify-content: flex-start; /* Inhalte oben starten */
+}
+
+/* Header-Stile */
+.app-header {
+    width: 100%;
+    padding: 15px 25px;
+    background: rgba(255, 255, 255, 0.05); /* Leichter Glas-Effekt Hintergrund */
+    backdrop-filter: blur(10px); /* Glas-Effekt Unschärfe */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+    border-radius: 0 0 15px 15px; /* Abgerundete Ecken unten */
+    position: fixed; /* Header bleibt oben */
+    top: 0;
+    left: 0;
+    z-index: 1000; /* Stellt sicher, dass der Header oben bleibt */
+}
+
+.app-name {
+    font-size: 1.8em;
+    font-weight: bold;
+    color: #00bfff; /* Ein lebhaftes Blau */
+    text-shadow: 0 0 8px rgba(0, 191, 255, 0.7); /* Leucht-Effekt */
+}
+
+.user-controls {
+    display: flex;
+    align-items: center;
+}
+
+.profile-icon-container {
+    position: relative;
+    cursor: pointer;
+}
+
+.profile-icon {
+    width: 45px; /* Etwas größer für bessere Sichtbarkeit */
+    height: 45px;
+    border-radius: 50%; /* Rundes Profilbild */
+    border: 2px solid #00bfff; /* Blauer Rahmen */
+    transition: transform 0.2s ease-in-out; /* Animation für Hover */
+}
+
+.profile-icon:hover {
+    transform: scale(1.1); /* Zoom-Effekt beim Hover */
+    box-shadow: 0 0 15px rgba(0, 191, 255, 0.8); /* Leuchten beim Hover */
+}
+
+/* Hauptinhaltsbereich */
+.app-content {
+    flex-grow: 1; /* Nimmt den verbleibenden Platz ein */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    width: 100%;
+    margin-top: 100px; /* Platz für den fixierten Header */
+    box-sizing: border-box; /* Padding wird in die Breite/Höhe einberechnet */
+}
+
+/* Allgemeine Glas-Effekt-Klasse */
+.glass-effect {
+    background: rgba(255, 255, 255, 0.08); /* Hintergrund mit leichter Transparenz */
+    backdrop-filter: blur(15px); /* Starke Unschärfe für den Glas-Effekt */
+    border: 1px solid rgba(255, 255, 255, 0.15); /* Heller Rand */
+    border-radius: 20px; /* Abgerundete Ecken */
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); /* Tiefer Schatten */
+    padding: 40px;
+    margin: 20px;
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+}
+
+/* Formular-Stile */
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* Abstand zwischen den Elementen */
+    margin-top: 25px;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"] { /* Falls wir später Textfelder brauchen */
+    padding: 12px 18px;
+    border: none;
+    border-radius: 10px; /* Abgerundete Eingabefelder */
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+input[type="email"]::placeholder,
+input[type="password"]::placeholder,
+input[type="text"]::placeholder {
+    color: rgba(224, 224, 224, 0.7);
+}
+
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="text"]:focus {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 10px rgba(0, 191, 255, 0.5); /* Leuchten beim Fokus */
+}
+
+/* Button-Stile mit Glas-Effekt und Hover */
+.glass-button {
+    background: linear-gradient(135deg, rgba(0, 191, 255, 0.8), rgba(0, 128, 255, 0.8)); /* Farbverlauf */
+    border: none;
+    padding: 15px 25px;
+    border-radius: 10px; /* Abgerundete Ecken */
+    color: white;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.glass-button:hover {
+    background: linear-gradient(135deg, rgba(0, 191, 255, 1), rgba(0, 128, 255, 1));
+    transform: translateY(-2px); /* Leichter Hoch-Effekt */
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+a {
+    color: #00bfff;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+a:hover {
+    color: #0099e6;
+    text-decoration: underline;
+}
+
+h2 {
+    color: #e0e0e0;
+    margin-bottom: 20px;
+    text-shadow: 0 0 5px rgba(0, 191, 255, 0.5);
+}
+
+/* Responsives Design für kleinere Bildschirme */
+@media (max-width: 768px) {
+    .app-header {
+        flex-direction: column;
+        padding: 10px 15px;
+        border-radius: 0 0 10px 10px;
+    }
+
+    .app-name {
+        margin-bottom: 10px;
+        font-size: 1.5em;
+    }
+
+    .app-content {
+        margin-top: 120px; /* Mehr Platz für den Header bei kleineren Bildschirmen */
+        padding: 10px;
+    }
+
+    .glass-effect {
+        padding: 25px;
+        margin: 10px;
+    }
+
+    .profile-icon {
+        width: 35px;
+        height: 35px;
+    }
+}
